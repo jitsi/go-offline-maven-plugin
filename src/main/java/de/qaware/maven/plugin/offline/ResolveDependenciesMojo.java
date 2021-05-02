@@ -1,5 +1,8 @@
 package de.qaware.maven.plugin.offline;
 
+import java.io.File;
+import java.util.Arrays;
+import org.apache.maven.RepositoryUtils;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
@@ -11,6 +14,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import org.apache.maven.project.ProjectBuilder;
+import org.apache.maven.project.ProjectBuildingException;
 
 /**
  * Mojo used to download all dependencies of a project or reactor to the local repository.
@@ -31,6 +36,9 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
     @Component
     private DependencyDownloader dependencyDownloader;
 
+    @Component
+    private ProjectBuilder projectBuilder;
+
     @Parameter
     private List<DynamicDependency> dynamicDependencies;
 
@@ -43,6 +51,15 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
     @Parameter(defaultValue = "false", property = "failOnErrors")
     private boolean failOnErrors;
 
+    @Parameter(property = "artifactTypes")
+    private List<ArtifactType> artifactTypes;
+
+    @Parameter(property = "targetRepository")
+    private File targetRepository;
+
+    @Parameter(property = "copyPoms")
+    private boolean copyPoms = false;
+
     public void execute() throws MojoExecutionException {
         validateConfiguration();
         dependencyDownloader.init(getBuildingRequest(), getReactorProjects(), getLog());
@@ -53,28 +70,53 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
             dependencyDownloader.enableDownloadJavadoc();
         }
 
-        List<Plugin> allPlugins = new ArrayList<>();
-        for (MavenProject mavenProject : getReactorProjects()) {
-            List<Plugin> buildPlugins = mavenProject.getBuildPlugins();
-            allPlugins.addAll(buildPlugins);
-        }
-
         Set<ArtifactWithRepoType> artifactsToDownload = new HashSet<>();
 
-
-        for (Plugin plugin : allPlugins) {
-            artifactsToDownload.addAll(dependencyDownloader.resolvePlugin(plugin));
+        if (artifactTypes == null) {
+            artifactTypes = new ArrayList<>(3);
         }
-        for (MavenProject project : getReactorProjects()) {
-            artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project));
+        if (artifactTypes.isEmpty()) {
+            artifactTypes.addAll(Arrays.asList(ArtifactType.values()));
         }
-        if (dynamicDependencies != null) {
+        if (artifactTypes.contains(ArtifactType.Plugin)) {
+            List<Plugin> allPlugins = new ArrayList<>();
+            for (MavenProject mavenProject : getReactorProjects()) {
+                List<Plugin> buildPlugins = mavenProject.getBuildPlugins();
+                allPlugins.addAll(buildPlugins);
+            }
+            for (Plugin plugin : allPlugins) {
+                artifactsToDownload.addAll(dependencyDownloader.resolvePlugin(plugin));
+            }
+        }
+        if (artifactTypes.contains(ArtifactType.Dependency)) {
+            for (MavenProject project : getReactorProjects()) {
+                artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project, copyPoms));
+            }
+            Set<ArtifactWithRepoType> parents = new HashSet<>();
+            getBuildingRequest().setProcessPlugins(false);
+            artifactsToDownload.forEach(a -> {
+                try {
+                    MavenProject project = projectBuilder
+                        .build(RepositoryUtils.toArtifact(a.getArtifact()), true, getBuildingRequest())
+                        .getProject();
+                    while (project.hasParent()) {
+                        parents.add(new ArtifactWithRepoType(RepositoryUtils.toArtifact(project.getParent().getArtifact()), RepositoryType.MAIN));
+                        project = project.getParent();
+                    }
+                } catch (ProjectBuildingException e) {
+                    getLog().warn("Could not build project from dependency " + a, e);
+                }
+            });
+            getBuildingRequest().setProcessPlugins(true);
+            artifactsToDownload.addAll(parents);
+        }
+        if (dynamicDependencies != null && artifactTypes.contains(ArtifactType.DynamicDependency)) {
             for (DynamicDependency dep : dynamicDependencies) {
                 artifactsToDownload.addAll(dependencyDownloader.resolveDynamicDependency(dep));
             }
         }
 
-        dependencyDownloader.downloadArtifacts(artifactsToDownload);
+        dependencyDownloader.downloadArtifacts(artifactsToDownload, targetRepository, copyPoms);
 
 
         List<Exception> errors = dependencyDownloader.getErrors();

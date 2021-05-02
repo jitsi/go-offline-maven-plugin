@@ -4,15 +4,15 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>de.qaware.maven</groupId>
+    <groupId>org.jitsi</groupId>
     <artifactId>go-offline-maven-plugin</artifactId>
-    <version>1.2.8</version>
+    <version>1.2.8-jitsi.1-SNAPSHOT</version>
     <packaging>maven-plugin</packaging>
     <name>Go Offline Maven Plugin</name>
     <description>Maven Plugin used to download all Dependencies and Plugins required in a Maven build,
         so the build can be run without an internet connection afterwards.
     </description>
-    <url>https://github.com/qaware/go-offline-maven-plugin</url>
+    <url>https://github.com/jitsi/go-offline-maven-plugin</url>
 
     <prerequisites>
         <maven>${mavenVersion}</maven>
@@ -26,8 +26,8 @@
         </license>
     </licenses>
     <organization>
-        <name>QAware GmbH</name>
-        <url>https://www.qaware.de/</url>
+        <name>jitsi.org</name>
+        <url>https://jitsi.org</url>
     </organization>
     <developers>
         <developer>
@@ -37,24 +37,29 @@
             <organization>QAware GmbH</organization>
             <organizationUrl>https://www.qaware.de/</organizationUrl>
         </developer>
+        <developer>
+            <id>org.jitsi</id>
+            <name>Jitsi Team</name>
+            <email>dev@jitsi.org</email>
+        </developer>
     </developers>
 
     <scm>
-        <connection>scm:git:https://github.com/qaware/go-offline-maven-plugin.git</connection>
-        <developerConnection>scm:git:https://github.com/qaware/go-offline-maven-plugin.git</developerConnection>
-        <url>scm:git:https://github.com/qaware/go-offline-maven-plugin/tree/master</url>
+        <connection>scm:git:https://github.com/jitsi/go-offline-maven-plugin.git</connection>
+        <developerConnection>scm:git:https://github.com/jitsi/go-offline-maven-plugin.git</developerConnection>
+        <url>scm:git:https://github.com/jitsi/go-offline-maven-plugin/tree/master</url>
     </scm>
 
     <issueManagement>
         <system>GitHub</system>
-        <url>https://github.com/qaware/go-offline-maven-plugin/issues</url>
+        <url>https://github.com/jitsi/go-offline-maven-plugin/issues</url>
     </issueManagement>
 
     <properties>
-        <mavenVersion>3.1.0</mavenVersion>
+        <mavenVersion>3.6.3</mavenVersion>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <maven.plugin.tools.version>3.5.2</maven.plugin.tools.version>
     </properties>
 
@@ -80,28 +85,10 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-source-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <id>attach-javadoc</id>
-                        <phase>verify</phase>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
         <pluginManagement>
@@ -112,7 +99,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
-                    <version>3.8.0</version>
+                    <version>3.8.1</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-deploy-plugin</artifactId>
@@ -124,7 +111,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>3.2.0</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
@@ -132,7 +119,7 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-jar-plugin</artifactId>
-                    <version>3.1.0</version>
+                    <version>3.2.0</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
@@ -142,21 +129,61 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-source-plugin</artifactId>
-                    <version>3.0.1</version>
+                    <version>3.2.1</version>
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-javadoc-plugin</artifactId>
-                    <version>3.0.1</version>
+                    <version>3.2.0</version>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
 
+    <profiles>
+        <profile>
+            <id>release</id>
+            <activation>
+                <property>
+                    <name>performRelease</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>1.6</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback</arg>
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
     <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
         <repository>
-            <id>bintray-qaware-oss</id>
-            <url>https://api.bintray.com/maven/qaware-oss/maven/go-offline-maven-plugin/;publish=1</url>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
         </repository>
     </distributionManagement>
 </project>

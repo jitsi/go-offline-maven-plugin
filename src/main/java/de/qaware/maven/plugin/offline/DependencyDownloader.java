@@ -1,7 +1,12 @@
 package de.qaware.maven.plugin.offline;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import org.apache.maven.RepositoryUtils;
 import org.apache.maven.artifact.handler.manager.ArtifactHandlerManager;
+import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.DependencyManagement;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.logging.Log;
@@ -25,6 +30,9 @@ import org.eclipse.aether.collection.DependencySelector;
 import org.eclipse.aether.graph.Dependency;
 import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.graph.DependencyVisitor;
+import org.eclipse.aether.repository.LocalArtifactRegistration;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.repository.LocalRepositoryManager;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
@@ -71,6 +79,9 @@ public class DependencyDownloader {
     @Requirement
     private ArtifactHandlerManager artifactHandlerManager;
 
+    @Requirement
+    private MavenSession mavenSession;
+
     private DefaultRepositorySystemSession remoteSession;
     private DefaultRepositorySystemSession pluginSession;
     private List<RemoteRepository> remoteRepositories;
@@ -82,6 +93,7 @@ public class DependencyDownloader {
     private boolean downloadSources = false;
     private boolean downloadJavadoc = false;
     private Set<ReactorArtifact> reactorArtifacts;
+    private ProjectBuildingRequest buildingRequest;
 
     /**
      * Initialize the DependencyDownloader
@@ -92,6 +104,7 @@ public class DependencyDownloader {
      */
     public void init(ProjectBuildingRequest buildingRequest, List<MavenProject> reactorProjects, Log logger) {
         this.log = logger;
+        this.buildingRequest = buildingRequest;
         typeRegistry = RepositoryUtils.newArtifactTypeRegistry(artifactHandlerManager);
         remoteRepositories = RepositoryUtils.toRepos(buildingRequest.getRemoteRepositories());
         pluginRepositories = RepositoryUtils.toRepos(buildingRequest.getPluginArtifactRepositories());
@@ -130,7 +143,7 @@ public class DependencyDownloader {
     }
 
 
-    public void downloadArtifacts(Collection<ArtifactWithRepoType> artifacts) {
+    public void downloadArtifacts(Collection<ArtifactWithRepoType> artifacts, File targetRepository, boolean copyPoms) {
         List<ArtifactRequest> mainRequests = new ArrayList<>(artifacts.size());
         List<ArtifactRequest> pluginRequests = new ArrayList<>(artifacts.size());
         for (ArtifactWithRepoType artifactWithRepoType : artifacts) {
@@ -157,10 +170,27 @@ public class DependencyDownloader {
                     Artifact javadocArtifact = new DefaultArtifact(artifact.getGroupId(), artifact.getArtifactId(), "javadoc", artifact.getExtension(), artifact.getVersion());
                     mainRequests.add(new ArtifactRequest(javadocArtifact, remoteRepositories, context.getRequestContext()));
                 }
+                if (copyPoms) {
+                    Artifact pomArtifact = new DefaultArtifact(artifact.getGroupId(), artifact.getArtifactId(), "pom", artifact.getVersion());
+                    mainRequests.add(new ArtifactRequest(pomArtifact, remoteRepositories, context.getRequestContext()));
+                }
             }
         }
         try {
-            repositorySystem.resolveArtifacts(remoteSession, mainRequests);
+            LocalRepository localRepository = new LocalRepository(targetRepository);
+            LocalRepositoryManager localRepositoryManager = repositorySystem
+                .newLocalRepositoryManager(mavenSession.getRepositorySession(), localRepository);
+            repositorySystem.resolveArtifacts(remoteSession, mainRequests).forEach(a ->{
+                try {
+                    File dest = new File(targetRepository, localRepositoryManager.getPathForLocalArtifact(a.getArtifact()));
+                    dest.getParentFile().mkdirs();
+                    Files.copy(a.getArtifact().getFile().toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                    localRepositoryManager.add(mavenSession.getRepositorySession(), new LocalArtifactRegistration(a.getArtifact()));
+                } catch (IOException e) {
+                    log.error("Could not install artifact " + a);
+                    handleRepositoryException(e);
+                }
+            });
         } catch (ArtifactResolutionException | RuntimeException e) {
             log.error("Error downloading dependencies for project");
             handleRepositoryException(e);
@@ -182,7 +212,7 @@ public class DependencyDownloader {
      *
      * @param project the project to download the dependencies for.
      */
-    public Set<ArtifactWithRepoType> resolveDependencies(MavenProject project) {
+    public Set<ArtifactWithRepoType> resolveDependencies(MavenProject project, boolean includePoms) {
         Artifact projectArtifact = RepositoryUtils.toArtifact(project.getArtifact());
         CollectRequest collectRequest = new CollectRequest();
         collectRequest.setRepositories(remoteRepositories);
