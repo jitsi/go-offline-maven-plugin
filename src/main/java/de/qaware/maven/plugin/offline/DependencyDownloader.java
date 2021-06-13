@@ -211,8 +211,9 @@ public class DependencyDownloader {
      * Transitive dependencies with the scopes "test", "system" and "provided" are ignored.
      *
      * @param project the project to download the dependencies for.
+     * @param onlyBoms only download BOMs (import-scoped dependencies)
      */
-    public Set<ArtifactWithRepoType> resolveDependencies(MavenProject project, boolean includePoms) {
+    public Set<ArtifactWithRepoType> resolveDependencies(MavenProject project, boolean onlyBoms) {
         Artifact projectArtifact = RepositoryUtils.toArtifact(project.getArtifact());
         CollectRequest collectRequest = new CollectRequest();
         collectRequest.setRepositories(remoteRepositories);
@@ -221,9 +222,11 @@ public class DependencyDownloader {
 
 
         List<Dependency> aetherDependencies = new ArrayList<>();
-        for (org.apache.maven.model.Dependency d : project.getDependencies()) {
-            Dependency dependency = RepositoryUtils.toDependency(d, typeRegistry);
-            aetherDependencies.add(dependency);
+        if (!onlyBoms) {
+            for (org.apache.maven.model.Dependency d : project.getDependencies()) {
+                Dependency dependency = RepositoryUtils.toDependency(d, typeRegistry);
+                aetherDependencies.add(dependency);
+            }
         }
 
         collectRequest.setDependencies(aetherDependencies);
@@ -236,6 +239,18 @@ public class DependencyDownloader {
                 aetherDepManagement.add(dependency);
             }
         }
+
+        // find BOMs / import-scoped dependencies
+        DependencyManagement dependencyManagementOriginal = project.getOriginalModel().getDependencyManagement();
+        if (dependencyManagementOriginal != null) {
+            for (org.apache.maven.model.Dependency d : dependencyManagementOriginal.getDependencies()) {
+                Dependency dependency = RepositoryUtils.toDependency(d, typeRegistry);
+                if (dependency.getScope().equalsIgnoreCase("import")) {
+                    aetherDependencies.add(dependency);
+                }
+            }
+        }
+
         collectRequest.setManagedDependencies(aetherDepManagement);
 
         try {

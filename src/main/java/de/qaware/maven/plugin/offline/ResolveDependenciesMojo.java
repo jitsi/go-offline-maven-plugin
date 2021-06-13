@@ -90,7 +90,7 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
         }
         if (artifactTypes.contains(ArtifactType.Dependency)) {
             for (MavenProject project : getReactorProjects()) {
-                artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project, copyPoms));
+                artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project, false));
             }
             Set<ArtifactWithRepoType> parents = new HashSet<>();
             getBuildingRequest().setProcessPlugins(false);
@@ -99,6 +99,7 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
                     MavenProject project = projectBuilder
                         .build(RepositoryUtils.toArtifact(a.getArtifact()), true, getBuildingRequest())
                         .getProject();
+                    artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project, true));
                     while (project.hasParent()) {
                         parents.add(new ArtifactWithRepoType(RepositoryUtils.toArtifact(project.getParent().getArtifact()), RepositoryType.MAIN));
                         project = project.getParent();
