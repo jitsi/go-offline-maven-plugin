@@ -99,7 +99,7 @@ public class ResolveDependenciesMojo extends AbstractGoOfflineMojo {
                     MavenProject project = projectBuilder
                         .build(RepositoryUtils.toArtifact(a.getArtifact()), true, getBuildingRequest())
                         .getProject();
-                    artifactsToDownload.addAll(dependencyDownloader.resolveDependencies(project, true));
+                    parents.addAll(dependencyDownloader.resolveDependencies(project, true));
                     while (project.hasParent()) {
                         parents.add(new ArtifactWithRepoType(RepositoryUtils.toArtifact(project.getParent().getArtifact()), RepositoryType.MAIN));
                         project = project.getParent();
